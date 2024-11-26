@@ -1,13 +1,12 @@
 #include <stdio.h>
-#include <winsock2.h>  //raw socket 정의 헤더
-#include <iphlpapi.h>
+#include <winsock2.h>
 #include <ws2tcpip.h>
-#include <windows.h>
 #include <stdint.h>
 #include <time.h>
-#include <pcap.h> //npcap 설치 요구
+#include <pcap.h> // 소켓 오픈
+#include <string.h>
 
-#pragma comment(lib, "ws2_32.lib")  // 함수의 실제 작동 파악
+#pragma comment(lib, "ws2_32.lib")
 
 #define ETHERNET_HEADER_SIZE 14
 #define IP_MAXPACKET 65535
@@ -37,17 +36,16 @@ struct icmphdr {
 
 // 체크섬 계산 함수
 unsigned short checksum(void *b, int len) {
-    unsigned short *buf = b; // 2바이트
-    unsigned int sum = 0; // 4바이트
+    unsigned short *buf = b;
+    unsigned int sum = 0;
     unsigned short result;
 
     for (sum = 0; len > 1; len -= 2)
-        sum += *buf++; //buf 의 다음을 가져옴
-    // 홀수일 경우 마지막 1바이트 처리
+        sum += *buf++; //
+
     if (len == 1)
         sum += *(unsigned char *)buf;
 
-    // 16비트로 덧셈 후 1의 보수를 취함
     sum = (sum >> 16) + (sum & 0xFFFF);
     sum += (sum >> 16);
     result = ~sum;
@@ -58,7 +56,6 @@ void build_icmp_packet(uint8_t *packet, const char *src_ip, const char *dest_ip,
     struct iphdr *ip_header = (struct iphdr *)packet;
     struct icmphdr *icmp_header = (struct icmphdr *)(packet + sizeof(struct iphdr));
 
-    // IP Header 설정
     ip_header->ihl = 5;
     ip_header->version = 4;
     ip_header->tos = 0;
@@ -72,7 +69,6 @@ void build_icmp_packet(uint8_t *packet, const char *src_ip, const char *dest_ip,
     ip_header->check = 0;
     ip_header->check = checksum((unsigned short *)ip_header, sizeof(struct iphdr));
 
-    // ICMP Header 설정
     icmp_header->type = 8; // Echo Request
     icmp_header->code = 0;
     icmp_header->checksum = 0;
@@ -91,7 +87,7 @@ void send_packet(pcap_t *handle, char *packet, int packet_size) {
 void packet_handler(u_char *args, const struct pcap_pkthdr *header, const u_char *packet) {
     struct iphdr *ip_header = (struct iphdr *)(packet + ETHERNET_HEADER_SIZE);
     struct icmphdr *icmp_header = (struct icmphdr *)(packet + ETHERNET_HEADER_SIZE + ip_header->ihl * 4);
-    printf(icmp_header->type);
+
     if (icmp_header->type == 0) { // Echo Reply
         printf("Echo Reply from %s\n", inet_ntoa(*(struct in_addr *)&ip_header->saddr));
     } else if (icmp_header->type == 11) { // TTL Exceeded
@@ -161,27 +157,39 @@ void get_local_ip(char *ip) {
 
     char host[256];
     struct hostent *he;
-    struct in_addr addr;
 
-    gethostname(host, sizeof(host));  // 호스트 이름을 얻기
-    he = gethostbyname(host);  // 호스트 이름으로 IP 주소 얻기
+    /*struct hostent {
+    char *h_name; // 공식 호스트 이름
+    char **h_aliases; // 별칭
+    int h_addrtype; // AF_INET, AF_INET6
+    int h_length; // 주소길이
+    char **h_addr_list; // 호스트의 IP 주소 가리키는 변수에는 배열로 되어있음
+    */
+
+    struct in_addr addr;
+    /*
+    struct in_addr {
+        uint32_t s_addr;  // ipv4 ip
+    };
+    */
+    gethostname(host, sizeof(host)); //호스트 이름을 저장할 버퍼변수와 그 버퍼의 크기
+    he = gethostbyname(host); // 호스트이름을 기반으로 정보를 가져옴 이때 hostent 구조체 반환
 
     if (he == NULL) {
         printf("Unable to get host information\n");
         return;
     }
 
-    addr.s_addr = *(u_long *)he->h_addr_list[0];  // 첫 번째 IP 주소를 사용
-    strcpy(ip, inet_ntoa(addr));  // 로컬 IP 저장
+    addr.s_addr = *he->h_addr_list[0]; //구조체 중에 실질적 ip값을 가진 변수의 포인터들을 배열을 가진 변수에서 ip에 대한 포인터를 역참조  addr.s_addr에 저장
+    strcpy(ip, inet_ntoa(addr)); // ip를 가진 addr를 local_ip배열에 넣는것
     WSACleanup();
 }
 
 int main() {
     char local_ip[16];
-    get_local_ip(local_ip);  // 자신의 로컬 IP 주소를 가져옵니다.
+    get_local_ip(local_ip);
     const char *src_ip = local_ip;
-    const char *dest_ip = "8.8.8.8";   // 목적지 IP 주소
+    const char *dest_ip = "8.8.8.8";
     tracert(src_ip, dest_ip);
-
     return 0;
 }
