@@ -69,6 +69,7 @@ void build_icmp_packet(uint8_t *packet, const char *src_ip, const char *dest_ip,
     ip_header->check = 0;
     ip_header->check = checksum((unsigned short *)ip_header, sizeof(struct iphdr));
 
+
     icmp_header->type = 8; // Echo Request
     icmp_header->code = 0;
     icmp_header->checksum = 0;
@@ -79,17 +80,30 @@ void build_icmp_packet(uint8_t *packet, const char *src_ip, const char *dest_ip,
 
 void send_packet(pcap_t *handle, char *packet, int packet_size) {
     int check = pcap_sendpacket(handle, (const u_char *)packet, packet_size);
+    printf("%d",check);
     if (check != 0) {
         printf("Error sending packet: %s\n", pcap_geterr(handle));
-        printf(check);
     }
 }
 void packet_handler(u_char *args, const struct pcap_pkthdr *header, const u_char *packet) {
     struct iphdr *ip_header = (struct iphdr *)(packet + ETHERNET_HEADER_SIZE);
     struct icmphdr *icmp_header = (struct icmphdr *)(packet + ETHERNET_HEADER_SIZE + ip_header->ihl * 4);
 
+    // 수신된 패킷 크기 확인
+    printf("Received Packet Size: %d bytes\n", header->len);
+
+    // IP 주소 확인 (출발지와 목적지)
+    printf("Source IP Address: %s\n", inet_ntoa(*(struct in_addr *)&ip_header->saddr));
+    printf("Destination IP Address: %s\n", inet_ntoa(*(struct in_addr *)&ip_header->daddr));
+
     if (icmp_header->type == 0) { // Echo Reply
         printf("Echo Reply from %s\n", inet_ntoa(*(struct in_addr *)&ip_header->saddr));
+        // Echo Reply의 ICMP 데이터까지 출력할 수 있음
+        printf("ICMP Reply Data (first 10 bytes): ");
+        for (int i = 0; i < 10 && (header->len - (ETHERNET_HEADER_SIZE + ip_header->ihl * 4 + sizeof(struct icmphdr))) > i; i++) {
+            printf("%02x ", packet[ETHERNET_HEADER_SIZE + ip_header->ihl * 4 + sizeof(struct icmphdr) + i]);
+        }
+        printf("\n");
     } else if (icmp_header->type == 11) { // TTL Exceeded
         printf("TTL Exceeded from %s\n", inet_ntoa(*(struct in_addr *)&ip_header->saddr));
     }
@@ -119,7 +133,9 @@ void tracert(const char *src_ip, const char *dest_ip) {
         pcap_freealldevs(all_devices);
         return;
     }
-    printf("please work3");
+    else {
+        printf("Device opened successfully: %s\n", device->name);
+    }
     uint8_t packet[IP_MAXPACKET];
     for (int ttl = 1; ttl <= 30; ttl++) {
         memset(packet, 0, sizeof(packet));
@@ -128,6 +144,7 @@ void tracert(const char *src_ip, const char *dest_ip) {
         build_icmp_packet(packet, src_ip, dest_ip, ttl);
 
         // 패킷 전송
+        printf("Packet size: %d\n", sizeof(struct iphdr) + sizeof(struct icmphdr));
         if (pcap_sendpacket(handle, packet, sizeof(struct iphdr) + sizeof(struct icmphdr)) != 0) {
             fprintf(stderr, "Error sending packet: %s\n", pcap_geterr(handle));
             break;
@@ -144,6 +161,7 @@ void tracert(const char *src_ip, const char *dest_ip) {
         } else {
             fprintf(stderr, "Error capturing packet: %s\n", pcap_geterr(handle));
         }
+        Sleep(10000);
 
     }
 
@@ -180,7 +198,7 @@ void get_local_ip(char *ip) {
         return;
     }
 
-    addr.s_addr = *he->h_addr_list[0]; //구조체 중에 실질적 ip값을 가진 변수의 포인터들을 배열을 가진 변수에서 ip에 대한 포인터를 역참조  addr.s_addr에 저장
+    addr.s_addr = *(unsigned long *)he->h_addr_list[0]; //구조체 중에 실질적 ip값을 가진 변수의 포인터들을 배열을 가진 변수에서 ip에 대한 포인터를 역참조  addr.s_addr에 저장
     strcpy(ip, inet_ntoa(addr)); // ip를 가진 addr를 local_ip배열에 넣는것
     WSACleanup();
 }
@@ -188,6 +206,7 @@ void get_local_ip(char *ip) {
 int main() {
     char local_ip[16];
     get_local_ip(local_ip);
+    printf("local ip: %s\n", local_ip);
     const char *src_ip = local_ip;
     const char *dest_ip = "8.8.8.8";
     tracert(src_ip, dest_ip);
