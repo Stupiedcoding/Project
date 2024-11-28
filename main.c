@@ -1,37 +1,40 @@
 #include <stdio.h>
 #include <winsock2.h>
+#include <iphlpapi.h>
 #include <ws2tcpip.h>
+#include <windows.h>
 #include <stdint.h>
 #include <time.h>
-#include <pcap.h> // 소켓 오픈
-#include <string.h>
 
 #pragma comment(lib, "ws2_32.lib")
 
-#define ETHERNET_HEADER_SIZE 14
-#define IP_MAXPACKET 65535
-
-struct iphdr {
-    uint8_t ihl : 4;
-    uint8_t version : 4;
-    uint8_t tos;
-    uint16_t tot_len;
-    uint16_t id;
-    uint16_t frag_off;
-    uint8_t ttl;
-    uint8_t protocol;
-    uint16_t check;
-    uint32_t saddr;
-    uint32_t daddr;
+// ICMP 헤더 정의
+struct icmp_header {
+    unsigned char msg_type;
+    unsigned char detail_code;
+    unsigned short checksum;
+    unsigned short icmp_id;
+    unsigned short sequence;
 };
 
-// ICMP 헤더 구조체 정의
-struct icmphdr {
-    uint8_t type;
-    uint8_t code;
-    uint16_t checksum;
-    uint16_t id;
-    uint16_t sequence;
+// IP 헤더 정의
+struct ip_header {
+    unsigned char  iph_verlen;      // 4 bits for version, 4 bits for header length
+    unsigned char  iph_tos;         // Type of Service
+    unsigned short iph_len;         // Total length
+    unsigned short iph_ident;       // Identification
+    unsigned short iph_flagfrag;    // Flags and Fragment offset
+    unsigned char  iph_ttl;         // Time to live
+    unsigned char  iph_protocol;    // Protocol (ICMP, TCP, UDP, etc.)
+    unsigned short iph_chksum;      // Header checksum
+    unsigned int   iph_sourceip;    // Source IP address
+    unsigned int   iph_destip;      // Destination IP address
+};
+
+// ICMP 패킷 정의 (헤더 + 데이터)
+struct icmp_packet {
+    struct icmp_header ichd;
+    char data[64];
 };
 
 // 체크섬 계산 함수
@@ -41,8 +44,7 @@ unsigned short checksum(void *b, int len) {
     unsigned short result;
 
     for (sum = 0; len > 1; len -= 2)
-        sum += *buf++; //
-
+        sum += *buf++;
     if (len == 1)
         sum += *(unsigned char *)buf;
 
@@ -52,163 +54,103 @@ unsigned short checksum(void *b, int len) {
     return result;
 }
 
-void build_icmp_packet(uint8_t *packet, const char *src_ip, const char *dest_ip, int ttl) {
-    struct iphdr *ip_header = (struct iphdr *)packet;
-    struct icmphdr *icmp_header = (struct icmphdr *)(packet + sizeof(struct iphdr));
+// ICMP Echo Request 전송 함수
+void send_icmp_request(SOCKET raw_socket, const char *dest_ip, int ttl_value, int sequence) {
+    struct sockaddr_in dest_addr;
+    struct icmp_packet icmp_packet;
 
-    ip_header->ihl = 5;
-    ip_header->version = 4;
-    ip_header->tos = 0;
-    ip_header->tot_len = htons(sizeof(struct iphdr) + sizeof(struct icmphdr));
-    ip_header->id = htons(54321);
-    ip_header->frag_off = 0;
-    ip_header->ttl = ttl;
-    ip_header->protocol = IPPROTO_ICMP;
-    ip_header->saddr = inet_addr(src_ip);
-    ip_header->daddr = inet_addr(dest_ip);
-    ip_header->check = 0;
-    ip_header->check = checksum((unsigned short *)ip_header, sizeof(struct iphdr));
+    dest_addr.sin_family = AF_INET;
+    dest_addr.sin_port = 0; // ICMP 프로토콜
+    dest_addr.sin_addr.s_addr = inet_addr(dest_ip);
 
+    setsockopt(raw_socket, IPPROTO_IP, IP_TTL, (const char *)&ttl_value, sizeof(ttl_value));
 
-    icmp_header->type = 8; // Echo Request
-    icmp_header->code = 0;
-    icmp_header->checksum = 0;
-    icmp_header->id = htons(12345);
-    icmp_header->sequence = htons(ttl);
-    icmp_header->checksum = checksum((unsigned short *)icmp_header, sizeof(struct icmphdr));
-}
+    memset(&icmp_packet, 0, sizeof(icmp_packet));
+    icmp_packet.ichd.msg_type = 8;
+    icmp_packet.ichd.detail_code = 0;
+    icmp_packet.ichd.icmp_id = htons(1);
+    icmp_packet.ichd.sequence = htons(sequence);
+    memset(icmp_packet.data, 0, sizeof(icmp_packet.data));
+    strcpy(icmp_packet.data, "ICMP Echo Data");
+    icmp_packet.ichd.checksum = checksum(&icmp_packet, sizeof(icmp_packet));
 
-void send_packet(pcap_t *handle, char *packet, int packet_size) {
-    int check = pcap_sendpacket(handle, (const u_char *)packet, packet_size);
-    printf("%d",check);
-    if (check != 0) {
-        printf("Error sending packet: %s\n", pcap_geterr(handle));
-    }
-}
-void packet_handler(u_char *args, const struct pcap_pkthdr *header, const u_char *packet) {
-    struct iphdr *ip_header = (struct iphdr *)(packet + ETHERNET_HEADER_SIZE);
-    struct icmphdr *icmp_header = (struct icmphdr *)(packet + ETHERNET_HEADER_SIZE + ip_header->ihl * 4);
-
-    // 수신된 패킷 크기 확인
-    printf("Received Packet Size: %d bytes\n", header->len);
-
-    // IP 주소 확인 (출발지와 목적지)
-    printf("Source IP Address: %s\n", inet_ntoa(*(struct in_addr *)&ip_header->saddr));
-    printf("Destination IP Address: %s\n", inet_ntoa(*(struct in_addr *)&ip_header->daddr));
-
-    if (icmp_header->type == 0) { // Echo Reply
-        printf("Echo Reply from %s\n", inet_ntoa(*(struct in_addr *)&ip_header->saddr));
-        // Echo Reply의 ICMP 데이터까지 출력할 수 있음
-        printf("ICMP Reply Data (first 10 bytes): ");
-        for (int i = 0; i < 10 && (header->len - (ETHERNET_HEADER_SIZE + ip_header->ihl * 4 + sizeof(struct icmphdr))) > i; i++) {
-            printf("%02x ", packet[ETHERNET_HEADER_SIZE + ip_header->ihl * 4 + sizeof(struct icmphdr) + i]);
-        }
-        printf("\n");
-    } else if (icmp_header->type == 11) { // TTL Exceeded
-        printf("TTL Exceeded from %s\n", inet_ntoa(*(struct in_addr *)&ip_header->saddr));
+    if (sendto(raw_socket, (const char *)&icmp_packet, sizeof(icmp_packet), 0, (struct sockaddr *)&dest_addr, sizeof(dest_addr)) < 0) {
+        printf("Sendto failed: %d\n", WSAGetLastError());
+        return;
     }
 }
 
-// Tracert 구현 함수
-void tracert(const char *src_ip, const char *dest_ip) {
-    pcap_if_t *all_devices, *device;
-    char errbuf[PCAP_ERRBUF_SIZE];
+void receive_icmp_reply(SOCKET raw_socket, int ttl_value, int *reached_target) {
+    struct sockaddr_in back;
+    int from_len = sizeof(back);
+    char recv_buffer[1024];
+    int recv_size;
 
-    // 디바이스 목록 가져오기
-    if (pcap_findalldevs(&all_devices, errbuf) == -1) {
-        fprintf(stderr, "Error finding devices: %s\n", errbuf);
-        return;
-    }
+    recv_size = recvfrom(raw_socket, recv_buffer, sizeof(recv_buffer), 0, (struct sockaddr *)&back, &from_len);
 
-    device = all_devices;
-    if (device == NULL) {
-        fprintf(stderr, "No devices found.\n");
-        return;
-    }
-
-    // 첫 번째 디바이스 선택
-    pcap_t *handle = pcap_open_live(device->name, 65536, 1, 1000, errbuf);
-    if (handle == NULL) {
-        fprintf(stderr, "Error opening device: %s\n", errbuf);
-        pcap_freealldevs(all_devices);
-        return;
-    }
-    else {
-        printf("Device opened successfully: %s\n", device->name);
-    }
-    uint8_t packet[IP_MAXPACKET];
-    for (int ttl = 1; ttl <= 30; ttl++) {
-        memset(packet, 0, sizeof(packet));
-
-        // ICMP 패킷 작성
-        build_icmp_packet(packet, src_ip, dest_ip, ttl);
-
-        // 패킷 전송
-        printf("Packet size: %d\n", sizeof(struct iphdr) + sizeof(struct icmphdr));
-        if (pcap_sendpacket(handle, packet, sizeof(struct iphdr) + sizeof(struct icmphdr)) != 0) {
-            fprintf(stderr, "Error sending packet: %s\n", pcap_geterr(handle));
-            break;
-        }
-
-        // 패킷 수신
-        struct pcap_pkthdr *header;
-        const u_char *recv_packet;
-        int result = pcap_next_ex(handle, &header, &recv_packet);
-        if (result == 1) {
-            packet_handler(NULL, header, recv_packet);
-        } else if (result == 0) {
-            printf("Timeout waiting for packet.\n");
+    if (recv_size == SOCKET_ERROR) {
+        int error_code = WSAGetLastError();
+        if (error_code == WSAETIMEDOUT) {
+            printf("Request time out, no packet received\n");
         } else {
-            fprintf(stderr, "Error capturing packet: %s\n", pcap_geterr(handle));
+            printf("Recvfrom failed: %d\n", error_code);
         }
-        Sleep(10000);
-
+        return;
     }
 
-    // 종료
-    pcap_close(handle);
-    pcap_freealldevs(all_devices);
+    // IP 헤더를 가져오기
+    struct ip_header *iphdr = (struct ip_header *)recv_buffer;
+
+    // IP 프로토콜이 ICMP일 때만 처리
+    if (iphdr->iph_protocol == IPPROTO_ICMP) {
+        // IP 헤더 뒤에 ICMP 헤더가 존재하므로 오프셋을 맞춰서 ICMP 헤더를 읽음
+        struct icmp_header *reply_header = (struct icmp_header *)(recv_buffer + (iphdr->iph_verlen & 0x0F) * 4);
+
+        if (reply_header->msg_type == 0) {
+            printf("IP trace is complete\n");
+            *reached_target = 1;
+        } else if (reply_header->msg_type == 11) {
+            printf("Hop %d: %s\n", ttl_value, inet_ntoa(back.sin_addr));
+        }
+    } else {
+        printf("Non-ICMP packet received, ignoring...\n");
+    }
 }
-void get_local_ip(char *ip) {
+
+void trace_route(const char *dest_ip) {
+    SOCKET raw_socket;
     WSADATA wsaData;
     WSAStartup(MAKEWORD(2, 2), &wsaData);
 
-    char host[256];
-    struct hostent *he;
-
-    /*struct hostent {
-    char *h_name; // 공식 호스트 이름
-    char **h_aliases; // 별칭
-    int h_addrtype; // AF_INET, AF_INET6
-    int h_length; // 주소길이
-    char **h_addr_list; // 호스트의 IP 주소 가리키는 변수에는 배열로 되어있음
-    */
-
-    struct in_addr addr;
-    /*
-    struct in_addr {
-        uint32_t s_addr;  // ipv4 ip
-    };
-    */
-    gethostname(host, sizeof(host)); //호스트 이름을 저장할 버퍼변수와 그 버퍼의 크기
-    he = gethostbyname(host); // 호스트이름을 기반으로 정보를 가져옴 이때 hostent 구조체 반환
-
-    if (he == NULL) {
-        printf("Unable to get host information\n");
+    raw_socket = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP);
+    if (raw_socket < 0) {
+        printf("Socket creation failed\n");
         return;
     }
 
-    addr.s_addr = *(unsigned long *)he->h_addr_list[0]; //구조체 중에 실질적 ip값을 가진 변수의 포인터들을 배열을 가진 변수에서 ip에 대한 포인터를 역참조  addr.s_addr에 저장
-    strcpy(ip, inet_ntoa(addr)); // ip를 가진 addr를 local_ip배열에 넣는것
+    // 소켓 타임아웃 설정
+    int timeout = 3000;
+    setsockopt(raw_socket, SOL_SOCKET, SO_RCVTIMEO, (const char*)&timeout, sizeof(timeout));
+
+    for (int ttl = 1; ttl <= 30; ttl++) {
+        int tracert_yes_no = 0;
+        send_icmp_request(raw_socket, dest_ip, ttl, ttl * 256);
+        receive_icmp_reply(raw_socket, ttl, &tracert_yes_no);
+        if (tracert_yes_no) {
+            closesocket(raw_socket);
+            WSACleanup();
+            printf("Trace complete.\n");
+            return;
+
+        }
+    }
+
+    closesocket(raw_socket);
     WSACleanup();
 }
 
 int main() {
-    char local_ip[16];
-    get_local_ip(local_ip);
-    printf("local ip: %s\n", local_ip);
-    const char *src_ip = local_ip;
-    const char *dest_ip = "8.8.8.8";
-    tracert(src_ip, dest_ip);
+    const char *dest_ip = "223.130.200.236"; // 목적지 IP
+    trace_route(dest_ip);
     return 0;
 }

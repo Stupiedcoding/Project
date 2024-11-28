@@ -264,6 +264,15 @@ Project_IS_TOP_LEVEL:STATIC=ON
 //Value Computed by CMake
 Project_SOURCE_DIR:STATIC=C:/Project
 
+//Value Computed by CMake
+tracertproject_BINARY_DIR:STATIC=C:/Project/cmake-build-debug
+
+//Value Computed by CMake
+tracertproject_IS_TOP_LEVEL:STATIC=ON
+
+//Value Computed by CMake
+tracertproject_SOURCE_DIR:STATIC=C:/Project
+
 
 ########################
 # INTERNAL cache entries
