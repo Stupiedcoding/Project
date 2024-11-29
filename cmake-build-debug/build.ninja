@@ -52,7 +52,6 @@ build cmake_object_order_depends_target_your_program_name: phony || .
 build CMakeFiles/your_program_name.dir/main.c.obj: C_COMPILER__your_program_name_unscanned_Debug C$:/Project/main.c || cmake_object_order_depends_target_your_program_name
   DEP_FILE = CMakeFiles\your_program_name.dir\main.c.obj.d
   FLAGS = -g -fdiagnostics-color=always
-  INCLUDES = -I"C:/Program Files/Npcap/Include"
   OBJECT_DIR = CMakeFiles\your_program_name.dir
   OBJECT_FILE_DIR = CMakeFiles\your_program_name.dir
 
@@ -64,10 +63,9 @@ build CMakeFiles/your_program_name.dir/main.c.obj: C_COMPILER__your_program_name
 #############################################
 # Link the executable your_program_name.exe
 
-build your_program_name.exe: C_EXECUTABLE_LINKER__your_program_name_Debug CMakeFiles/your_program_name.dir/main.c.obj | C$:/Program$ Files/Npcap/Lib/wpcap.lib
+build your_program_name.exe: C_EXECUTABLE_LINKER__your_program_name_Debug CMakeFiles/your_program_name.dir/main.c.obj
   FLAGS = -g
-  LINK_LIBRARIES = "C:/Program Files/Npcap/Lib/wpcap.lib"  -lws2_32  -lkernel32 -luser32 -lgdi32 -lwinspool -lshell32 -lole32 -loleaut32 -luuid -lcomdlg32 -ladvapi32
-  LINK_PATH = -LC:/PROGRA~1/Npcap/Lib
+  LINK_LIBRARIES = -lws2_32  -lkernel32 -luser32 -lgdi32 -lwinspool -lshell32 -lole32 -loleaut32 -luuid -lcomdlg32 -ladvapi32
   OBJECT_DIR = CMakeFiles\your_program_name.dir
   POST_BUILD = cd .
   PRE_LINK = cd .

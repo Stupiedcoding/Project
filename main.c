@@ -55,7 +55,7 @@ unsigned short checksum(void *b, int len) {
 }
 
 // ICMP Echo Request 전송 함수
-void send_icmp_request(SOCKET raw_socket, const char *dest_ip, int ttl_value, int sequence) {
+void send_icmp_request(SOCKET raw_socket, char *dest_ip, int ttl_value, int sequence) {
     struct sockaddr_in dest_addr;
     struct icmp_packet icmp_packet;
 
@@ -80,6 +80,7 @@ void send_icmp_request(SOCKET raw_socket, const char *dest_ip, int ttl_value, in
     }
 }
 
+
 void receive_icmp_reply(SOCKET raw_socket, int ttl_value, int *reached_target) {
     struct sockaddr_in receiver_info;
 
@@ -95,8 +96,6 @@ void receive_icmp_reply(SOCKET raw_socket, int ttl_value, int *reached_target) {
         }
         return;
     }
-
-    // IP 헤더를 가져오기
     struct ip_header *receive_ip_address = (struct ip_header *)recv_buffer;
 
     if (receive_ip_address->iph_protocol == IPPROTO_ICMP) {
@@ -112,7 +111,24 @@ void receive_icmp_reply(SOCKET raw_socket, int ttl_value, int *reached_target) {
     }
 }
 
-void trace_route(const char *dest_ip) {
+void DNS_to_ip(char *dest_ip) {
+    struct sockaddr_in dest_addr;
+    struct hostent *host_entry = gethostbyname(dest_ip);
+    if(inet_addr(dest_ip) != INADDR_NONE) {
+        return;
+    }
+    if (host_entry == NULL) {
+        printf("Host not found\n");
+        return;
+    }
+    else {
+        memcpy(&dest_addr.sin_addr, host_entry->h_addr_list[0], sizeof(dest_addr.sin_addr));
+        strcpy(dest_ip, inet_ntoa(dest_addr.sin_addr));
+    }
+
+}
+
+void trace_route(char *dest_ip) {
     SOCKET raw_socket;
     WSADATA wsaData;
     WSAStartup(MAKEWORD(2, 2), &wsaData);
@@ -123,14 +139,15 @@ void trace_route(const char *dest_ip) {
         return;
     }
 
-    // 소켓 타임아웃 설정
     int timeout = 10000;
     setsockopt(raw_socket, SOL_SOCKET, SO_RCVTIMEO, (const char*)&timeout, sizeof(timeout));
-
+    DNS_to_ip(dest_ip);
+    printf("Destination IP: %s\n", dest_ip);
     for (int ttl = 1; ttl <= 30; ttl++) {
         int tracert_yes_no = 0;
         send_icmp_request(raw_socket, dest_ip, ttl, ttl * 256);
         receive_icmp_reply(raw_socket, ttl, &tracert_yes_no);
+        Sleep(3000);
         if (tracert_yes_no) {
             closesocket(raw_socket);
             WSACleanup();
@@ -143,7 +160,7 @@ void trace_route(const char *dest_ip) {
 }
 
 int main() {
-    const char *dest_ip = "8.8.8.8"; // 목적지 IP
+    char dest_ip[16] = "google.com"; // 목적지 IP
     trace_route(dest_ip);
     return 0;
 }
