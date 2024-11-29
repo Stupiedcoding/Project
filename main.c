@@ -1,14 +1,9 @@
 #include <stdio.h>
 #include <winsock2.h>
-#include <iphlpapi.h>
 #include <ws2tcpip.h>
 #include <windows.h>
-#include <stdint.h>
-#include <time.h>
+//#pragma comment(lib, "ws2_32.lib") if not use CMakeLists you must request linker by pragma comment
 
-#pragma comment(lib, "ws2_32.lib")
-
-// ICMP 헤더 정의
 struct icmp_header {
     unsigned char msg_type;
     unsigned char detail_code;
@@ -17,31 +12,28 @@ struct icmp_header {
     unsigned short sequence;
 };
 
-// IP 헤더 정의
-struct ip_header {
-    unsigned char  iph_verlen;      // 4 bits for version, 4 bits for header length
-    unsigned char  iph_tos;         // Type of Service
-    unsigned short iph_len;         // Total length
-    unsigned short iph_ident;       // Identification
-    unsigned short iph_flagfrag;    // Flags and Fragment offset
-    unsigned char  iph_ttl;         // Time to live
-    unsigned char  iph_protocol;    // Protocol (ICMP, TCP, UDP, etc.)
-    unsigned short iph_chksum;      // Header checksum
-    unsigned int   iph_sourceip;    // Source IP address
-    unsigned int   iph_destip;      // Destination IP address
+struct ip_header { // using icmp reply
+    unsigned char  iph_verlen; //ipv4 (4bit) + IHL(4bit)
+    unsigned char  iph_tos;
+    unsigned short iph_len; // IP hdr
+    unsigned short iph_ident;
+    unsigned short iph_flagfrag;
+    unsigned char  iph_ttl;
+    unsigned char  iph_protocol;// icmp,tcp,udp
+    unsigned short iph_chksum; //ip checksum
+    unsigned int   iph_sourceip; // router ip
+    unsigned int   iph_destip; // node ip(user,router)
 };
 
-// ICMP 패킷 정의 (헤더 + 데이터)
 struct icmp_packet {
     struct icmp_header ichd;
     char data[64];
 };
 
-// 체크섬 계산 함수
 unsigned short checksum(void *b, int len) {
     unsigned short *buf = b;
     unsigned int sum = 0;
-    unsigned short result;
+    unsigned short result = 0;
 
     for (sum = 0; len > 1; len -= 2)
         sum += *buf++;
@@ -54,8 +46,7 @@ unsigned short checksum(void *b, int len) {
     return result;
 }
 
-// ICMP Echo Request 전송 함수
-void send_icmp_request(SOCKET raw_socket, char *dest_ip, int ttl_value, int sequence) {
+void send_icmp_request(SOCKET raw_socket, const char *dest_ip, int ttl_value, int sequence) {
     struct sockaddr_in dest_addr;
     struct icmp_packet icmp_packet;
 
@@ -65,7 +56,8 @@ void send_icmp_request(SOCKET raw_socket, char *dest_ip, int ttl_value, int sequ
 
     setsockopt(raw_socket, IPPROTO_IP, IP_TTL, (const char *)&ttl_value, sizeof(ttl_value));
 
-    memset(&icmp_packet, 0, sizeof(icmp_packet));
+    memset(&icmp_packet, 0, sizeof(icmp_packet)); //padding problem
+
     icmp_packet.ichd.msg_type = 8;
     icmp_packet.ichd.detail_code = 0;
     icmp_packet.ichd.icmp_id = htons(1);
@@ -75,23 +67,22 @@ void send_icmp_request(SOCKET raw_socket, char *dest_ip, int ttl_value, int sequ
     icmp_packet.ichd.checksum = checksum(&icmp_packet, sizeof(icmp_packet));
 
     if (sendto(raw_socket, (const char *)&icmp_packet, sizeof(icmp_packet), 0, (struct sockaddr *)&dest_addr, sizeof(dest_addr)) < 0) {
-        printf("Sendto failed: %d\n", WSAGetLastError());
+        printf("sendfailed: %d\n", WSAGetLastError());
+        exit(1);
         return;
     }
 }
-
-
 void receive_icmp_reply(SOCKET raw_socket, int ttl_value, int *reached_target) {
     struct sockaddr_in receiver_info;
-
     int from_len = sizeof(receiver_info);
     char recv_buffer[2048];
 
-    if (recvfrom(raw_socket, recv_buffer, sizeof(recv_buffer), 0, (struct sockaddr *)&receiver_info, &from_len) == SOCKET_ERROR) {
+    if (recvfrom(raw_socket, recv_buffer, sizeof(recv_buffer), 0, (struct sockaddr *)&receiver_info, &from_len) == SOCKET_ERROR) { //SOCKET_ERROR == -1
         int error_code = WSAGetLastError();
-        if (error_code == WSAETIMEDOUT) {
-            printf("Request time out, no packet received\n");
+        if (error_code == WSAETIMEDOUT) { // if(error_code == 10060)
+            printf("Request time out, no packet received\n"); //
         } else {
+            if(error_code == WSAEINVAL) // if(error_code == 10022)
             printf("Recvfrom failed: %d\n", error_code);
         }
         return;
@@ -99,7 +90,7 @@ void receive_icmp_reply(SOCKET raw_socket, int ttl_value, int *reached_target) {
     struct ip_header *receive_ip_address = (struct ip_header *)recv_buffer;
 
     if (receive_ip_address->iph_protocol == IPPROTO_ICMP) {
-        struct icmp_header *reply_header = (struct icmp_header *)(recv_buffer + (receive_ip_address->iph_verlen & 0x0F) * 4);
+        struct icmp_header *reply_header = (struct icmp_header *)(recv_buffer + (receive_ip_address->iph_verlen & 0x0F) * 4); //IHL block(4byte) express digit
         if (reply_header->msg_type == 0) {
             printf("IP trace is complete\n");
             *reached_target = 1;
@@ -111,10 +102,10 @@ void receive_icmp_reply(SOCKET raw_socket, int ttl_value, int *reached_target) {
     }
 }
 
-void DNS_to_ip(char *dest_ip) {
+void DNS_to_ip(char *Dest_IP_OR_DNS) {
     struct sockaddr_in dest_addr;
-    struct hostent *host_entry = gethostbyname(dest_ip);
-    if(inet_addr(dest_ip) != INADDR_NONE) {
+    struct hostent *host_entry = gethostbyname(Dest_IP_OR_DNS);
+    if(inet_addr(Dest_IP_OR_DNS) != INADDR_NONE) {
         return;
     }
     if (host_entry == NULL) {
@@ -123,30 +114,39 @@ void DNS_to_ip(char *dest_ip) {
     }
     else {
         memcpy(&dest_addr.sin_addr, host_entry->h_addr_list[0], sizeof(dest_addr.sin_addr));
-        strcpy(dest_ip, inet_ntoa(dest_addr.sin_addr));
+        strcpy(Dest_IP_OR_DNS, inet_ntoa(dest_addr.sin_addr));
     }
 
 }
 
 void trace_route(char *dest_ip) {
     SOCKET raw_socket;
+
     WSADATA wsaData;
     WSAStartup(MAKEWORD(2, 2), &wsaData);
 
     raw_socket = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP);
+    LARGE_INTEGER  start, end,frequency; //integer 64bit
+    QueryPerformanceFrequency(&frequency); // 10MHz
+    //printf("Frequency: %lld counts per second\n", frequency.QuadPart);
     if (raw_socket < 0) {
         printf("Socket creation failed\n");
         return;
     }
-
-    int timeout = 10000;
+    int timeout = 3000;
     setsockopt(raw_socket, SOL_SOCKET, SO_RCVTIMEO, (const char*)&timeout, sizeof(timeout));
     DNS_to_ip(dest_ip);
-    printf("Destination IP: %s\n", dest_ip);
+    //printf("Destination IP: %s\n", dest_ip); checking code
     for (int ttl = 1; ttl <= 30; ttl++) {
         int tracert_yes_no = 0;
+        QueryPerformanceCounter(&start); //DWORD is UNSIGNED LONG, timing hardware example system clock reset timeing: computer re-booting
         send_icmp_request(raw_socket, dest_ip, ttl, ttl * 256);
         receive_icmp_reply(raw_socket, ttl, &tracert_yes_no);
+        QueryPerformanceCounter(&end);
+        double stop_watch = (double)(end.QuadPart - start.QuadPart) / (double)frequency.QuadPart;
+        printf("time : %f second\n", stop_watch);
+        //printf("Frequency: %lld counts per second\n", start.QuadPart); checking code
+        //printf("Frequency: %lld counts per second\n", end.QuadPart); checking code
         Sleep(3000);
         if (tracert_yes_no) {
             closesocket(raw_socket);
@@ -160,7 +160,8 @@ void trace_route(char *dest_ip) {
 }
 
 int main() {
-    char dest_ip[16] = "google.com"; // 목적지 IP
+    char dest_ip[16] = "google.com"; // destination IP or DNS
     trace_route(dest_ip);
     return 0;
 }
+
