@@ -81,14 +81,12 @@ void send_icmp_request(SOCKET raw_socket, const char *dest_ip, int ttl_value, in
 }
 
 void receive_icmp_reply(SOCKET raw_socket, int ttl_value, int *reached_target) {
-    struct sockaddr_in back;
-    int from_len = sizeof(back);
-    char recv_buffer[1024];
-    int recv_size;
+    struct sockaddr_in receiver_info;
 
-    recv_size = recvfrom(raw_socket, recv_buffer, sizeof(recv_buffer), 0, (struct sockaddr *)&back, &from_len);
+    int from_len = sizeof(receiver_info);
+    char recv_buffer[2048];
 
-    if (recv_size == SOCKET_ERROR) {
+    if (recvfrom(raw_socket, recv_buffer, sizeof(recv_buffer), 0, (struct sockaddr *)&receiver_info, &from_len) == SOCKET_ERROR) {
         int error_code = WSAGetLastError();
         if (error_code == WSAETIMEDOUT) {
             printf("Request time out, no packet received\n");
@@ -99,18 +97,15 @@ void receive_icmp_reply(SOCKET raw_socket, int ttl_value, int *reached_target) {
     }
 
     // IP 헤더를 가져오기
-    struct ip_header *iphdr = (struct ip_header *)recv_buffer;
+    struct ip_header *receive_ip_address = (struct ip_header *)recv_buffer;
 
-    // IP 프로토콜이 ICMP일 때만 처리
-    if (iphdr->iph_protocol == IPPROTO_ICMP) {
-        // IP 헤더 뒤에 ICMP 헤더가 존재하므로 오프셋을 맞춰서 ICMP 헤더를 읽음
-        struct icmp_header *reply_header = (struct icmp_header *)(recv_buffer + (iphdr->iph_verlen & 0x0F) * 4);
-
+    if (receive_ip_address->iph_protocol == IPPROTO_ICMP) {
+        struct icmp_header *reply_header = (struct icmp_header *)(recv_buffer + (receive_ip_address->iph_verlen & 0x0F) * 4);
         if (reply_header->msg_type == 0) {
             printf("IP trace is complete\n");
             *reached_target = 1;
         } else if (reply_header->msg_type == 11) {
-            printf("Hop %d: %s\n", ttl_value, inet_ntoa(back.sin_addr));
+            printf("Hop %d: %s\n", ttl_value, inet_ntoa(receiver_info.sin_addr));
         }
     } else {
         printf("Non-ICMP packet received, ignoring...\n");
@@ -129,7 +124,7 @@ void trace_route(const char *dest_ip) {
     }
 
     // 소켓 타임아웃 설정
-    int timeout = 3000;
+    int timeout = 10000;
     setsockopt(raw_socket, SOL_SOCKET, SO_RCVTIMEO, (const char*)&timeout, sizeof(timeout));
 
     for (int ttl = 1; ttl <= 30; ttl++) {
@@ -141,16 +136,14 @@ void trace_route(const char *dest_ip) {
             WSACleanup();
             printf("Trace complete.\n");
             return;
-
         }
     }
-
     closesocket(raw_socket);
     WSACleanup();
 }
 
 int main() {
-    const char *dest_ip = "223.130.200.236"; // 목적지 IP
+    const char *dest_ip = "8.8.8.8"; // 목적지 IP
     trace_route(dest_ip);
     return 0;
 }
