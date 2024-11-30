@@ -159,9 +159,13 @@ void trace_route(char *dest_ip) {
     WSACleanup();
 }
 
+
 int main() {
     char dest_ip[16] = "google.com"; // destination IP or DNS
     trace_route(dest_ip);
     return 0;
 }
+
+
+
 
