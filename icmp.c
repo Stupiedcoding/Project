@@ -72,7 +72,7 @@ void send_icmp_request(SOCKET raw_socket, const char *dest_ip, int ttl_value, in
         return;
     }
 }
-void receive_icmp_reply(SOCKET raw_socket, int ttl_value, int *reached_target) {
+int receive_icmp_reply(SOCKET raw_socket, int ttl_value, int *reached_target) {
     struct sockaddr_in receiver_info;
     int from_len = sizeof(receiver_info);
     char recv_buffer[2048];
@@ -85,7 +85,7 @@ void receive_icmp_reply(SOCKET raw_socket, int ttl_value, int *reached_target) {
             if(error_code == WSAEINVAL) // if(error_code == 10022)
             printf("Recvfrom failed: %d\n", error_code);
         }
-        return;
+        return 1;
     }
     struct ip_header *receive_ip_address = (struct ip_header *)recv_buffer;
 
@@ -96,9 +96,11 @@ void receive_icmp_reply(SOCKET raw_socket, int ttl_value, int *reached_target) {
             *reached_target = 1;
         } else if (reply_header->msg_type == 11) {
             printf("Hop %d: %s\n", ttl_value, inet_ntoa(receiver_info.sin_addr));
+            return 0;
         }
     } else {
         printf("Non-ICMP packet received, ignoring...\n");
+        return 1;
     }
 }
 
@@ -141,10 +143,11 @@ void trace_route(char *dest_ip) {
         int tracert_yes_no = 0;
         QueryPerformanceCounter(&start); //DWORD is UNSIGNED LONG, timing hardware example system clock reset timeing: computer re-booting
         send_icmp_request(raw_socket, dest_ip, ttl, ttl * 256);
-        receive_icmp_reply(raw_socket, ttl, &tracert_yes_no);
-        QueryPerformanceCounter(&end);
-        double stop_watch = (double)(end.QuadPart - start.QuadPart) / (double)frequency.QuadPart;
-        printf("time : %f second\n", stop_watch);
+        if(receive_icmp_reply(raw_socket, ttl, &tracert_yes_no)==0) {
+            QueryPerformanceCounter(&end);
+            double stop_watch = ((double)(end.QuadPart - start.QuadPart) / (double)frequency.QuadPart)*1000;
+            printf("time : %.4f ms\n", stop_watch);
+        }
         //printf("Frequency: %lld counts per second\n", start.QuadPart); checking code
         //printf("Frequency: %lld counts per second\n", end.QuadPart); checking code
         Sleep(3000);
@@ -165,7 +168,3 @@ int main() {
     trace_route(dest_ip);
     return 0;
 }
-
-
-
-
