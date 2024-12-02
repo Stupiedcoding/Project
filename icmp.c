@@ -121,12 +121,10 @@ void DNS_to_ip(char *Dest_IP_OR_DNS) {
 
 }
 
-void trace_route(char *dest_ip) {
+void trace_route(char *dest_ip,int input_ttl) {
     SOCKET raw_socket;
-
     WSADATA wsaData;
     WSAStartup(MAKEWORD(2, 2), &wsaData);
-
     raw_socket = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP);
     LARGE_INTEGER  start, end,frequency; //integer 64bit
     QueryPerformanceFrequency(&frequency); // 10MHz
@@ -135,36 +133,64 @@ void trace_route(char *dest_ip) {
         printf("Socket creation failed\n");
         return;
     }
+
     int timeout = 3000;
+    double stop_watch=0;
     setsockopt(raw_socket, SOL_SOCKET, SO_RCVTIMEO, (const char*)&timeout, sizeof(timeout));
     DNS_to_ip(dest_ip);
     //printf("Destination IP: %s\n", dest_ip); checking code
-    for (int ttl = 1; ttl <= 30; ttl++) {
-        int tracert_yes_no = 0;
-        QueryPerformanceCounter(&start); //DWORD is UNSIGNED LONG, timing hardware example system clock reset timeing: computer re-booting
-        send_icmp_request(raw_socket, dest_ip, ttl, ttl * 256);
-        if(receive_icmp_reply(raw_socket, ttl, &tracert_yes_no)==0) {
+
+    if(input_ttl == 0) {
+        for (int ttl = 1; ttl <= 30; ttl++) {
+            int tracert_yes_no = 0;
+            QueryPerformanceCounter(&start); //DWORD is UNSIGNED LONG, timing hardware example system clock reset timeing: computer re-booting
+            send_icmp_request(raw_socket, dest_ip, ttl, ttl * 256);
+            if(receive_icmp_reply(raw_socket, ttl, &tracert_yes_no)==0) {
+                QueryPerformanceCounter(&end);
+                stop_watch = ((double)(end.QuadPart - start.QuadPart) / (double)frequency.QuadPart)*1000;
+                printf("time : %.4f ms\n", stop_watch);
+            }
+            //printf("Frequency: %lld counts per second\n", start.QuadPart); checking code
+            //printf("Frequency: %lld counts per second\n", end.QuadPart); checking code
+            if (tracert_yes_no) {
+                closesocket(raw_socket);
+                WSACleanup();
+                printf("Trace complete.\n");
+                return;
+            }
+        }
+    }
+    else {
+        double avg_time=0;
+        double max_time=0;
+        double min_time=0;
+        for(int i = 1; i <= 10; i++) {
+            QueryPerformanceCounter(&start);
+            send_icmp_request(raw_socket, dest_ip, input_ttl, input_ttl * 256);
+            receive_icmp_reply(raw_socket, input_ttl, 0);
             QueryPerformanceCounter(&end);
-            double stop_watch = ((double)(end.QuadPart - start.QuadPart) / (double)frequency.QuadPart)*1000;
-            printf("time : %.4f ms\n", stop_watch);
+            stop_watch += ((double)(end.QuadPart - start.QuadPart) / (double)frequency.QuadPart)*1000;
+            if(min_time==0 && max_time==0) {
+                min_time = stop_watch;
+                max_time = stop_watch;
+            }
+            else if(min_time > stop_watch) {
+                min_time = stop_watch;
+            }
+            else if(max_time < stop_watch) {
+                max_time = stop_watch;
+            }
         }
-        //printf("Frequency: %lld counts per second\n", start.QuadPart); checking code
-        //printf("Frequency: %lld counts per second\n", end.QuadPart); checking code
-        Sleep(3000);
-        if (tracert_yes_no) {
-            closesocket(raw_socket);
-            WSACleanup();
-            printf("Trace complete.\n");
-            return;
-        }
+        printf("time : %.4f ms, max : %.4f ms , min : %.4f ms",stop_watch/10,max_time,min_time);
     }
     closesocket(raw_socket);
     WSACleanup();
 }
 
-
-int main() {
-    char dest_ip[16] = "google.com"; // destination IP or DNS
-    trace_route(dest_ip);
+int main(){
+    char dest_ip[16] ; // destination IP or DNS
+    int input_ttl=0;
+    scanf("%s %d",dest_ip,&input_ttl);
+    trace_route(dest_ip,input_ttl);
     return 0;
 }
