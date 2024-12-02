@@ -90,9 +90,10 @@ int receive_icmp_reply(SOCKET raw_socket, int ttl_value, int *reached_target) {
     struct ip_header *receive_ip_address = (struct ip_header *)recv_buffer;
 
     if (receive_ip_address->iph_protocol == IPPROTO_ICMP) {
+        struct icmp_header *ttl = (struct icmp_header *)recv_buffer;
         struct icmp_header *reply_header = (struct icmp_header *)(recv_buffer + (receive_ip_address->iph_verlen & 0x0F) * 4); //IHL block(4byte) express digit
         if (reply_header->msg_type == 0) {
-            printf("IP trace is complete\n");
+            printf("IP %s trace is complete ttl : %d\t",inet_ntoa(receiver_info.sin_addr),receive_ip_address->iph_ttl);
             *reached_target = 1;
         } else if (reply_header->msg_type == 11) {
             printf("Hop %d: %s\n", ttl_value, inet_ntoa(receiver_info.sin_addr));
