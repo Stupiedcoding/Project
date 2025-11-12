@@ -22,14 +22,21 @@ try:
             if "무척 더워" in text:
                 pwm.ChangeDutyCycle(90)
             elif "더워" in text:
+                print("더워라고 인식")
                 pwm.ChangeDutyCycle(20)
-            if "LED 꺼 줘" in text:
+            elif "LED 꺼 줘" in text:
                 print("LED 꺼 줘인식" )
                 GPIO.output(LED_PIN,GPIO.LOW)
-            if "LED 켜 줘" in text:
+            elif "LED 켜 줘" in text:
                 print("LED 켜 줘 인식")
                 GPIO.output(LED_PIN,GPIO.HIGH)
+            elif "그만" in text:
+                break
         except sr.UnknownValueError:
             print("음성을 이해할 수 없습니다.")
         except sr.RequestError as e:
             print(f"API 요청 실패: {e}")
+finally:
+    print("GPIO 및 PWM을 정리하고 종료합니다.")
+    pwm.stop()
+    GPIO.cleanup()
