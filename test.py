@@ -19,11 +19,10 @@ try:
         try:
             text = r.recognize_google(audio, language='ko-KR')
             print("인식 결과:", text)
-            if "더워" in text:
-                print("더워라고 인식")
-                pwm.ChangeDutyCycle(20)
             if "무척 더워" in text:
                 pwm.ChangeDutyCycle(90)
+            elif "더워" in text:
+                pwm.ChangeDutyCycle(20)
             if "LED 꺼 줘" in text:
                 print("LED 꺼 줘인식" )
                 GPIO.output(LED_PIN,GPIO.LOW)
