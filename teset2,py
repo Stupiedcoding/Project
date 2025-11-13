@@ -1,0 +1,46 @@
+
+import speech_recognition as sr
+import RPi.GPIO as GPIO
+
+# GPIO 설정
+LED_PIN = 16
+PWM_PIN_R = 17
+PWN_PIN_L = 4
+
+GPIO.setmode(GPIO.BCM)
+GPIO.setup(LED_PIN, GPIO.OUT)
+GPIO.setup(PWM_PIN_R, GPIO.OUT)
+GPIO.setup(PWN_PIN_L, GPIO.OUT)
+pwm_L = GPIO.PWM(PWM_PIN_L, 100)
+pwm_R = GPIO.PWM(PWM_PIN_R, 100)
+pwm_L.start(0)
+PWM_R.start(0)
+GPIO.output(PWM_PIN,GPIO.LOW)
+
+r = sr.Recognizer()
+mic= sr.Microphone(device_index=1)
+
+with mic  as source:
+    print("녹음시작")
+    audio = r.listen(source,timeout=5,phrase_time_limit=10)
+try:
+    text = r.recognize_google(audio, language='ko-KR')
+    print("인식 결과:", text)
+except sr.UnknownValueError:
+    print("음성을 이해할 수 없습니다.")
+except sr.RequestError as e:
+    print(f"API 요청 실패: {e}")
+else:
+    if text == "무척 더워" :
+        pwm_L.ChangeDutyCycle(90)
+    if text ==  "더워" :
+        print("더워라고 인식")
+        pwm_L.ChangeDutyCycle(20)
+    if text == "LED 꺼 줘" :
+        print("LED 꺼 줘 인식")
+        GPIO.output(LED_PIN, GPIO.LOW)
+    if text == "LED 켜 줘":
+        print("LED 켜 줘 인식")
+        GPIO.output(LED_PIN, GPIO.HIGH)
+
+
