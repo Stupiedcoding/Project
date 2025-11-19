@@ -16,14 +16,17 @@ def getDistance():
     
     pulse_start = time.time()
     
-    timeout = pulse_start + 0.5 
-    while GPIO.input(echo) == GPIO.LOW and pulse_start < timeout:
+    timeout = time.time() + 0.02
+    while GPIO.input(echo) == GPIO.LOW:
         pulse_start = time.time()
-        
-    pulse_end = pulse_start  
-    timeout = pulse_end + 0.5 
-    while GPIO.input(echo) == GPIO.HIGH and pulse_end < timeout:
+        if time.time() > timeout:
+            return -1  # timeout
+
+    timeout = time.time() + 0.02
+    while GPIO.input(echo) == GPIO.HIGH:
         pulse_end = time.time()
+        if time.time() > timeout:
+            return -1
 
     pulse_duration = pulse_end - pulse_start
     distance = pulse_duration * SPEED_OF_SOUND_HALF
