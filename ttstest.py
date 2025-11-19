@@ -1,8 +1,4 @@
-from gtts import gTTS
-import os
-import sys
-print(sys.getdefaultencoding())
-text=“라즈베리파이로 합성된 한글 음성입니다.”
-tts=gTTS(text=text, lang=‘ko’)
-tts.save(“output.mp3”)
-os.system(“mpg321 output.mp3”)
+import pyttsx3
+engine = pyttsx3.init()
+engine.say("안녕하세요, 라즈베리파이입니다.")
+engine.runAndWait()
