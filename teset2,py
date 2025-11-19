@@ -1,10 +1,13 @@
 import speech_recognition as sr
 import RPi.GPIO as GPIO
+import time # time 라이브러리 추가
 
+# --- GPIO 핀 정의 ---
 LED_PIN = 16
 PWM_PIN_R = 17
 PWM_PIN_L = 4
 
+# --- GPIO 설정 및 초기화 ---
 GPIO.setmode(GPIO.BCM)
 GPIO.setup(LED_PIN, GPIO.OUT)
 GPIO.setup(PWM_PIN_R, GPIO.OUT)
@@ -14,34 +17,56 @@ pwm_L = GPIO.PWM(PWM_PIN_L, 100)
 pwm_R = GPIO.PWM(PWM_PIN_R, 100)
 
 pwm_L.start(0)
-PWM_R.start(0)
-GPIO.output(PWM_PIN,GPIO.LOW)
+pwm_R.start(0) 
+
+GPIO.output(LED_PIN, GPIO.LOW) 
+
 
 r = sr.Recognizer()
-mic= sr.Microphone(device_index=1)
+mic = sr.Microphone(device_index=1)
 
+with mic as source:
+    print("환경 소음 보정 중... 잠시 기다려주세요.")
+    r.adjust_for_ambient_noise(source, duration=1.5)
+    
+print("음성 인식 시스템 시작. 명령 대기 중...")
 
 try:
-    while(True):
-            with mic as source:
-                audio =r.listen(source,timeout=5,phrase_time_limit=10)
+    while True:
+        with mic as source:
+            print("\n녹음 시작 (말씀하세요)...")
+            audio = r.listen(source, timeout=5, phrase_time_limit=10)
         try:
             text = r.recognize_google(audio, language='ko-KR')
             print("인식 결과:", text)
-            if text == "무척 더워" :
+            if "무척 더워" in text:
+                print("무척 더워 인식: 모터 90% 속도")
                 pwm_L.ChangeDutyCycle(90)
-            if text ==  "더워" :
-                print("더워라고 인식")
+            elif "더워" in text:
+                print("더워라고 인식: 모터 20% 속도")
                 pwm_L.ChangeDutyCycle(20)
-            if text == "LED 꺼 줘" :
+            elif "LED 꺼 줘" in text:
                 print("LED 꺼 줘 인식")
                 GPIO.output(LED_PIN, GPIO.LOW)
-            if text == "LED 켜 줘":
+            elif "LED 켜 줘" in text:
                 print("LED 켜 줘 인식")
                 GPIO.output(LED_PIN, GPIO.HIGH)
-    except sr.UnknownValueError:
-        print("음성을 이해할 수 없습니다.")
-    except sr.RequestError as e:
-        print(f"API 요청 실패: {e}")
+            elif "정지" in text or "멈춰" in text:
+                print("모터 정지")
+                pwm_L.ChangeDutyCycle(0)
+                pwm_R.ChangeDutyCycle(0)
+
+        except sr.UnknownValueError:
+            print("음성을 이해할 수 없습니다. 다시 시도하세요.")
+        except sr.RequestError as e:
+            print(f"API 요청 실패 (인터넷 연결 확인): {e}")
+            # API 요청 실패 시 잠시 대기
+            time.sleep(2) 
+
+except KeyboardInterrupt:
+    print("\n프로그램 종료.")
+    
 finally:
+    pwm_L.stop()
+    pwm_R.stop()
     GPIO.cleanup()
