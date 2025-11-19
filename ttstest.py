@@ -33,3 +33,6 @@ def __main__():
   GPIO.setmode(GPIO.BCM):
   GPIO.setup(trigger, GPIO.OUT)
   GPIO.setup(echo.GPIO.IN)
+
+  GPIO.output(trigger,GPIO.LOW)
+  time.sleep(0.5)
