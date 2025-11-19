@@ -5,9 +5,7 @@ import time
 trigger= 4
 echo = 17
 
-engine = pyttsx3.init()
-engine.say("안녕하세요, 라즈베리파이입니다.")
-engine.runAndWait()
+
 
 def getDistance():
   GPIO.output(trigger, GPIO.LOW)
@@ -29,10 +27,25 @@ def getDistance():
   distance = pulse_duration * 17150
   return distance
 
-def __main__():
+def main():
+  engine = pyttsx3.init()
   GPIO.setmode(GPIO.BCM):
   GPIO.setup(trigger, GPIO.OUT)
   GPIO.setup(echo.GPIO.IN)
 
   GPIO.output(trigger,GPIO.LOW)
   time.sleep(0.5)
+  try:
+    while True:
+      fDistance = getDistance()
+      if fDistance < 100:
+        engine.say("안녕하세요, 라즈베리파이입니다.")
+        engine.runAndWait()
+  except KeyboardInterrupt:
+    print("end")
+  finally:
+    GPIO.cleanup()
+
+if __name__ == '__main__':
+  main()
+
