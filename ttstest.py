@@ -10,10 +10,8 @@ def getDistance():
 
     GPIO.output(trigger, GPIO.LOW)
     time.sleep(0.000002)
-
-    
     GPIO.output(trigger, GPIO.HIGH)
-    time.sleep(0.00001)  
+    time.sleep(0.00001) 
     GPIO.output(trigger, GPIO.LOW)
     
     pulse_start = time.time()
@@ -21,7 +19,7 @@ def getDistance():
     timeout = pulse_start + 0.5 
     while GPIO.input(echo) == GPIO.LOW and pulse_start < timeout:
         pulse_start = time.time()
-
+        
     pulse_end = pulse_start  
     timeout = pulse_end + 0.5 
     while GPIO.input(echo) == GPIO.HIGH and pulse_end < timeout:
