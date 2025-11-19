@@ -55,7 +55,6 @@ def main():
                 
     except KeyboardInterrupt:
         print("프로그램 종료")
-    # 📌 필수: GPIO cleanup은 finally에서 실행
     finally:
         GPIO.cleanup()
         
