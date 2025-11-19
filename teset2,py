@@ -1,18 +1,19 @@
-
 import speech_recognition as sr
 import RPi.GPIO as GPIO
 
 # GPIO 설정
 LED_PIN = 16
 PWM_PIN_R = 17
-PWN_PIN_L = 4
+PWM_PIN_L = 4
 
 GPIO.setmode(GPIO.BCM)
 GPIO.setup(LED_PIN, GPIO.OUT)
 GPIO.setup(PWM_PIN_R, GPIO.OUT)
 GPIO.setup(PWN_PIN_L, GPIO.OUT)
+
 pwm_L = GPIO.PWM(PWM_PIN_L, 100)
 pwm_R = GPIO.PWM(PWM_PIN_R, 100)
+
 pwm_L.start(0)
 PWM_R.start(0)
 GPIO.output(PWM_PIN,GPIO.LOW)
