@@ -14,23 +14,21 @@ def getDistance():
     time.sleep(0.00001) 
     GPIO.output(trigger, GPIO.LOW)
     
-    pulse_start = time.time()
     
     timeout = time.time() + 0.02
     while GPIO.input(echo) == GPIO.LOW:
-        pulse_start = time.time()
         if time.time() > timeout:
-            return -1  # timeout
+            return -1
+    pulse_start = time.time()  # HIGH 시작
 
     timeout = time.time() + 0.02
     while GPIO.input(echo) == GPIO.HIGH:
-        pulse_end = time.time()
         if time.time() > timeout:
             return -1
+    pulse_end = time.time()
 
     pulse_duration = pulse_end - pulse_start
     distance = pulse_duration * SPEED_OF_SOUND_HALF
-    
     return distance
 
 def main():
@@ -53,7 +51,6 @@ def main():
                 time.sleep(2)
             else:
                 time.sleep(0.1) 
-                
     except KeyboardInterrupt:
         print("프로그램 종료")
     finally:
