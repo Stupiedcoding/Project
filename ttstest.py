@@ -44,10 +44,10 @@ def main():
         while True:
             fDistance = getDistance()
             print(f"Distance: {fDistance:.2f} cm")
-            if fDistance < 100 and fDistance > 0.1: 
+            if fDistance < 30 and fDistance > 0.1: 
                 engine.say("안녕하세요, 라즈베리파이입니다.")
                 engine.runAndWait()
-                time.sleep(2) 
+                time.sleep(2)
             else:
                 time.sleep(0.1) 
                 
