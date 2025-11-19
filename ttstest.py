@@ -10,16 +10,26 @@ engine.say("안녕하세요, 라즈베리파이입니다.")
 engine.runAndWait()
 
 def getDistance():
-  #GPIO.setmode(GPIO.BCM)
-  GPIO.setup(GPIO_TRIGGER, GPIO.OUT)
+  GPIO.output(trigger, GPIO.LOW)
   time.sleep(0.000002)
-  GPIO.setup(GPIO_ECHO, GPIO.IN)
+  GPIO.output(trigger, GPIO.HIGH)
   time.sleep(0.000002)
-  GPIO.output(GPIO_TRIGGER, GPIO.LOW)
-  #GPIO setting
+  GPIO.output(trigger, GPIO.LOW)
   
   pulse_start=time.time()
   
   timeout = pulse_start + 0.1
-  while GPIO.input(GPIO_ECHO) == GPIO.LOW and :
-    start_time = 
+  while GPIO.input(echo) == GPIO.LOW and pulse_start < timeout:
+    pulse_start = time.time()
+  pulse_end = time.time()
+  timeout = pulse_end + 0.1
+  while GPIO.input(echo) == GPIO.HIGH and pulse_end < timeout:
+    pulse_end = time.time()
+  pulse_duration = pulse_end - pulse_start
+  distance = pulse_duration * 17150
+  return distance
+
+def __main__():
+  GPIO.setmode(GPIO.BCM):
+  GPIO.setup(trigger, GPIO.OUT)
+  GPIO.setup(echo.GPIO.IN)
