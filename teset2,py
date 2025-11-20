@@ -21,12 +21,6 @@ GPIO.output(LED_PIN, GPIO.LOW) # LED 초기화
 r = sr.Recognizer()
 mic = sr.Microphone(device_index=1) # 마이크 인덱스 설정
 
-with mic as source:
-    print("환경 소음 보정 중... 잠시 기다려주세요.")
-    r.adjust_for_ambient_noise(source, duration=1.5)
-    
-print("음성 인식 시스템 시작. 명령 대기 중...")
-
 try:
     while True:
         with mic as source:
